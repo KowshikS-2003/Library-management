@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>BorrowRecord.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">library-management</a> &gt; <a href="index.source.html" class="el_package">com.library.LibraryEntity.LibraryCatalog</a> &gt; <span class="el_source">BorrowRecord.java</span></div><h1>BorrowRecord.java</h1><pre class="source lang-java linenums">package com.library.LibraryEntity.LibraryCatalog;
+
+import jakarta.persistence.*;
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = &quot;borrow_record&quot;)
+public class BorrowRecord {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = &quot;member_id&quot;, nullable = false)
+    private Long memberId;
+
+    @Column(name = &quot;book_id&quot;, nullable = false)
+    private Long bookId;
+
+<span class="fc" id="L20">    @Column(name = &quot;borrowed_at&quot;, nullable = false)</span>
+<span class="fc" id="L21">    private LocalDateTime borrowedAt = LocalDateTime.now();</span>
+
+    @Column(name = &quot;returned_at&quot;)
+    private LocalDateTime returnedAt;
+
+<span class="fc" id="L26">    public BorrowRecord() {}</span>
+
+<span class="fc" id="L28">    public BorrowRecord(Long memberId, Long bookId) {</span>
+<span class="fc" id="L29">        this.memberId = memberId;</span>
+<span class="fc" id="L30">        this.bookId = bookId;</span>
+<span class="fc" id="L31">        this.borrowedAt = LocalDateTime.now();</span>
+<span class="fc" id="L32">    }</span>
+
+<span class="fc" id="L34">    public Long getId() { return id; }</span>
+<span class="fc" id="L35">    public void setId(Long id) { this.id = id; }</span>
+
+<span class="fc" id="L37">    public Long getMemberId() { return memberId; }</span>
+<span class="fc" id="L38">    public void setMemberId(Long memberId) { this.memberId = memberId; }</span>
+
+<span class="fc" id="L40">    public Long getBookId() { return bookId; }</span>
+<span class="fc" id="L41">    public void setBookId(Long bookId) { this.bookId = bookId; }</span>
+
+<span class="fc" id="L43">    public LocalDateTime getBorrowedAt() { return borrowedAt; }</span>
+<span class="fc" id="L44">    public void setBorrowedAt(LocalDateTime borrowedAt) { this.borrowedAt = borrowedAt; }</span>
+
+<span class="fc" id="L46">    public LocalDateTime getReturnedAt() { return returnedAt; }</span>
+<span class="fc" id="L47">    public void setReturnedAt(LocalDateTime returnedAt) { this.returnedAt = returnedAt; }</span>
+
+    @Override
+    public String toString() {
+<span class="fc bfc" id="L51" title="All 2 branches covered.">        String status = (returnedAt == null) ? &quot;active&quot; : &quot;returned &quot; + returnedAt;</span>
+<span class="fc" id="L52">        return String.format(&quot;BorrowRecord{id=%d, memberId=%d, bookId=%d, borrowed=%s, %s}&quot;,</span>
+                id, memberId, bookId, borrowedAt, status);
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

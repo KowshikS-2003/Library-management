@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>GlobalExceptionHandler.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">library-management</a> &gt; <a href="index.source.html" class="el_package">com.library.LibraryCustomExceptions</a> &gt; <span class="el_source">GlobalExceptionHandler.java</span></div><h1>GlobalExceptionHandler.java</h1><pre class="source lang-java linenums">package com.library.LibraryCustomExceptions;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import com.library.LibraryAppConstants.AppConstants;
+
+import jakarta.validation.ConstraintViolationException;
+
+import java.util.stream.Collectors;
+
+@RestControllerAdvice
+<span class="fc" id="L18">public class GlobalExceptionHandler {</span>
+
+<span class="fc" id="L20">    private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);</span>
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity&lt;ErrorResponse&gt; handleResourceNotFound(ResourceNotFoundException ex) {
+<span class="fc" id="L24">        logger.warn(AppConstants.LOG_RESOURCE_NOT_FOUND, ex.getMessage());</span>
+<span class="fc" id="L25">        ErrorResponse error = new ErrorResponse(</span>
+<span class="fc" id="L26">                HttpStatus.NOT_FOUND.value(), AppConstants.ERROR_NOT_FOUND, ex.getMessage());</span>
+<span class="fc" id="L27">        return new ResponseEntity&lt;&gt;(error, HttpStatus.NOT_FOUND);</span>
+    }
+
+    @ExceptionHandler(BookNotAvailableException.class)
+    public ResponseEntity&lt;ErrorResponse&gt; handleBookNotAvailable(BookNotAvailableException ex) {
+<span class="fc" id="L32">        logger.warn(AppConstants.LOG_BOOK_NOT_AVAILABLE, ex.getMessage());</span>
+<span class="fc" id="L33">        ErrorResponse error = new ErrorResponse(</span>
+<span class="fc" id="L34">                HttpStatus.CONFLICT.value(), AppConstants.ERROR_CONFLICT, ex.getMessage());</span>
+<span class="fc" id="L35">        return new ResponseEntity&lt;&gt;(error, HttpStatus.CONFLICT);</span>
+    }
+
+    @ExceptionHandler(BorrowLimitExceededException.class)
+    public ResponseEntity&lt;ErrorResponse&gt; handleBorrowLimitExceeded(BorrowLimitExceededException ex) {
+<span class="fc" id="L40">        logger.warn(AppConstants.LOG_BORROW_LIMIT_EXCEEDED, ex.getMessage());</span>
+<span class="fc" id="L41">        ErrorResponse error = new ErrorResponse(</span>
+<span class="fc" id="L42">                HttpStatus.CONFLICT.value(), AppConstants.ERROR_CONFLICT, ex.getMessage());</span>
+<span class="fc" id="L43">        return new ResponseEntity&lt;&gt;(error, HttpStatus.CONFLICT);</span>
+    }
+
+    @ExceptionHandler(BookAlreadyReturnedException.class)
+    public ResponseEntity&lt;ErrorResponse&gt; handleBookAlreadyReturned(BookAlreadyReturnedException ex) {
+<span class="fc" id="L48">        logger.warn(AppConstants.LOG_BOOK_ALREADY_RETURNED, ex.getMessage());</span>
+<span class="fc" id="L49">        ErrorResponse error = new ErrorResponse(</span>
+<span class="fc" id="L50">                HttpStatus.CONFLICT.value(), AppConstants.ERROR_CONFLICT, ex.getMessage());</span>
+<span class="fc" id="L51">        return new ResponseEntity&lt;&gt;(error, HttpStatus.CONFLICT);</span>
+    }
+
+    @ExceptionHandler(InvalidOperationException.class)
+    public ResponseEntity&lt;ErrorResponse&gt; handleInvalidOperation(InvalidOperationException ex) {
+<span class="fc" id="L56">        logger.warn(AppConstants.LOG_INVALID_OPERATION, ex.getMessage());</span>
+<span class="fc" id="L57">        ErrorResponse error = new ErrorResponse(</span>
+<span class="fc" id="L58">                HttpStatus.BAD_REQUEST.value(), AppConstants.ERROR_BAD_REQUEST, ex.getMessage());</span>
+<span class="fc" id="L59">        return new ResponseEntity&lt;&gt;(error, HttpStatus.BAD_REQUEST);</span>
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity&lt;ErrorResponse&gt; handleValidationErrors(MethodArgumentNotValidException ex) {
+<span class="nc" id="L64">        String message = ex.getBindingResult().getFieldErrors().stream()</span>
+<span class="nc" id="L65">                .map(fieldError -&gt; fieldError.getField() + &quot;: &quot; + fieldError.getDefaultMessage())</span>
+<span class="nc" id="L66">                .collect(Collectors.joining(&quot;, &quot;));</span>
+<span class="nc" id="L67">        logger.warn(AppConstants.LOG_VALIDATION_FAILED, message);</span>
+<span class="nc" id="L68">        ErrorResponse error = new ErrorResponse(</span>
+<span class="nc" id="L69">                HttpStatus.BAD_REQUEST.value(), AppConstants.ERROR_VALIDATION_FAILED, message);</span>
+<span class="nc" id="L70">        return new ResponseEntity&lt;&gt;(error, HttpStatus.BAD_REQUEST);</span>
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity&lt;ErrorResponse&gt; handleConstraintViolation(ConstraintViolationException ex) {
+<span class="nc" id="L75">        String message = ex.getConstraintViolations().stream()</span>
+<span class="nc" id="L76">                .map(v -&gt; v.getPropertyPath() + &quot;: &quot; + v.getMessage())</span>
+<span class="nc" id="L77">                .collect(Collectors.joining(&quot;, &quot;));</span>
+<span class="nc" id="L78">        logger.warn(AppConstants.LOG_VALIDATION_FAILED, message);</span>
+<span class="nc" id="L79">        ErrorResponse error = new ErrorResponse(</span>
+<span class="nc" id="L80">                HttpStatus.BAD_REQUEST.value(), AppConstants.ERROR_VALIDATION_FAILED, message);</span>
+<span class="nc" id="L81">        return new ResponseEntity&lt;&gt;(error, HttpStatus.BAD_REQUEST);</span>
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity&lt;ErrorResponse&gt; handleGenericException(Exception ex) {
+<span class="fc" id="L86">        logger.error(AppConstants.LOG_UNEXPECTED_ERROR, ex);</span>
+<span class="fc" id="L87">        ErrorResponse error = new ErrorResponse(</span>
+<span class="fc" id="L88">                HttpStatus.INTERNAL_SERVER_ERROR.value(), AppConstants.ERROR_INTERNAL_SERVER,</span>
+                AppConstants.UNEXPECTED_ERROR);
+<span class="fc" id="L90">        return new ResponseEntity&lt;&gt;(error, HttpStatus.INTERNAL_SERVER_ERROR);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>

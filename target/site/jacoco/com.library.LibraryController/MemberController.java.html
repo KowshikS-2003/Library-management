@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MemberController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">library-management</a> &gt; <a href="index.source.html" class="el_package">com.library.LibraryController</a> &gt; <span class="el_source">MemberController.java</span></div><h1>MemberController.java</h1><pre class="source lang-java linenums">package com.library.LibraryController;
+
+import com.library.LibraryDTO.MemberDTO;
+import com.library.LibraryDTO.MemberRequest;
+import com.library.LibraryServiceInterface.MemberService;
+
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping(&quot;/api/v1/members&quot;)
+@Validated
+public class MemberController {
+
+<span class="fc" id="L22">    private static final Logger logger = LoggerFactory.getLogger(MemberController.class);</span>
+
+    private final MemberService memberService;
+
+<span class="fc" id="L26">    public MemberController(MemberService memberService) {</span>
+<span class="fc" id="L27">        this.memberService = memberService;</span>
+<span class="fc" id="L28">    }</span>
+
+    @PostMapping(&quot;/addMember&quot;)
+    public ResponseEntity&lt;MemberDTO&gt; addMember(@Valid @RequestBody MemberRequest request) {
+<span class="fc" id="L32">        logger.info(&quot;POST /api/v1/members/addMember - Adding new member&quot;);</span>
+<span class="fc" id="L33">        MemberDTO member = memberService.addMember(request);</span>
+<span class="fc" id="L34">        return ResponseEntity.ok(member);</span>
+    }
+
+    @GetMapping(&quot;/getAllMembers&quot;)
+    public ResponseEntity&lt;List&lt;MemberDTO&gt;&gt; getAllMembers() {
+<span class="fc" id="L39">        logger.info(&quot;GET /api/v1/members/getAllMembers - Fetching all members&quot;);</span>
+<span class="fc" id="L40">        return ResponseEntity.ok(memberService.getAllMembers());</span>
+    }
+
+    @GetMapping(&quot;/getMember/{id}&quot;)
+    public ResponseEntity&lt;MemberDTO&gt; getMember(@PathVariable(&quot;id&quot;) @Positive(message = &quot;Member ID must be a positive number&quot;) Long id) {
+<span class="fc" id="L45">        logger.info(&quot;GET /api/v1/members/getMember/{} - Fetching member&quot;, id);</span>
+<span class="fc" id="L46">        return ResponseEntity.ok(memberService.getMember(id));</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.12.202403310830</span></div></body></html>
