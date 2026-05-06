@@ -1,0 +1,213 @@
+================================================================================
+           LIBRARY MANAGEMENT SYSTEM - CODE EXPLANATION
+================================================================================
+
+1. PROJECT OVERVIEW
+-------------------
+This is a Spring Boot REST API for managing a library system. It supports
+managing books, members, and borrow/return operations. The application uses
+MySQL as the database, Spring Data JPA for persistence, and follows a
+layered architecture: Controller -> Service -> Repository -> Entity.
+
+
+2. PACKAGE STRUCTURE
+--------------------
+com.library
+  |-- LibraryApplication.java        (Main entry point)
+  |-- controller/                    (REST API endpoints)
+  |     |-- BookController.java
+  |     |-- MemberController.java
+  |     |-- BorrowController.java
+  |-- service/                       (Business logic)
+  |     |-- BookService.java
+  |     |-- MemberService.java
+  |     |-- BorrowService.java
+  |-- repository/                    (Data access layer)
+  |     |-- BookRepository.java
+  |     |-- MemberRepository.java
+  |     |-- BorrowRecordRepository.java
+  |-- entity/                        (JPA entities / database tables)
+  |     |-- Book.java
+  |     |-- Member.java
+  |     |-- BorrowRecord.java
+  |-- dto/                           (Data Transfer Objects)
+  |     |-- BookDTO.java
+  |     |-- BookRequest.java
+  |     |-- MemberDTO.java
+  |     |-- MemberRequest.java
+  |     |-- BorrowRecordDTO.java
+  |     |-- BorrowRequest.java
+  |     |-- UpdateCopiesRequest.java
+  |-- exception/                     (Custom exceptions & global handler)
+        |-- ResourceNotFoundException.java
+        |-- BookNotAvailableException.java
+        |-- BorrowLimitExceededException.java
+        |-- BookAlreadyReturnedException.java
+        |-- InvalidOperationException.java
+        |-- ErrorResponse.java
+        |-- GlobalExceptionHandler.java
+
+
+3. ENTITIES (Database Tables)
+-----------------------------
+a) Book.java
+   - Maps to the "book" table.
+   - Fields: id, title, author, totalCopies, availableCopies.
+   - totalCopies tracks how many copies the library owns.
+   - availableCopies tracks how many are currently not lent out.
+
+b) Member.java
+   - Maps to the "member" table.
+   - Fields: id, name, email (unique), createdAt.
+   - createdAt is auto-set to the current timestamp on creation.
+
+c) BorrowRecord.java
+   - Maps to the "borrow_record" table.
+   - Fields: id, member (FK), book (FK), borrowedAt, returnedAt.
+   - Uses @ManyToOne relationships to link to Member and Book.
+   - returnedAt is null while the book is still borrowed.
+
+
+4. DTOs (Data Transfer Objects)
+-------------------------------
+DTOs decouple the API layer from the database entities. This provides:
+- Security: Internal entity fields (like JPA-managed fields) are not exposed.
+- Flexibility: API response shape can differ from the database schema.
+- Clarity: Request DTOs define exactly what the client must send.
+
+a) BookDTO        - Response DTO for book data (id, title, author, copies info).
+b) BookRequest    - Request DTO for creating a book (title, author, totalCopies).
+c) MemberDTO      - Response DTO for member data (id, name, email, createdAt).
+d) MemberRequest  - Request DTO for creating a member (name, email).
+e) BorrowRecordDTO - Response DTO for borrow records (includes member/book names).
+f) BorrowRequest  - Request DTO for borrowing (memberId, bookId).
+g) UpdateCopiesRequest - Request DTO for updating book copies (totalCopies).
+
+
+5. REPOSITORIES (Data Access)
+-----------------------------
+Each repository extends JpaRepository, which provides standard CRUD methods
+(save, findById, findAll, delete, etc.) without writing any SQL.
+
+a) BookRepository
+   - Custom method: findByAvailableCopiesGreaterThanOrderByTitle(int minCopies)
+     Returns books that have available copies, ordered by title.
+
+b) MemberRepository
+   - Uses only default JpaRepository methods.
+
+c) BorrowRecordRepository
+   - countByMemberIdAndReturnedAtIsNull(Long memberId)
+     Counts active (unreturned) borrows for a member (used for the 3-book limit).
+   - findByMemberIdOrderByBorrowedAtDesc(Long memberId)
+     Gets a member's borrow history sorted newest first.
+   - findAllByOrderByBorrowedAtDesc()
+     Gets all borrow records sorted newest first.
+
+
+6. SERVICES (Business Logic)
+-----------------------------
+a) BookService
+   - addBook(BookRequest): Creates a new book. Sets availableCopies = totalCopies.
+   - getBook(Long id): Fetches a book by ID; throws ResourceNotFoundException if missing.
+   - getAllBooks(): Returns all books as DTOs.
+   - getAvailableBooks(): Returns only books with available copies.
+   - updateBookCopies(Long id, int newTotal): Updates total copies. Ensures the
+     new available count doesn't go negative (can't reduce below lent-out count).
+   - toDTO(Book): Converts a Book entity to a BookDTO.
+
+b) MemberService
+   - addMember(MemberRequest): Creates a new member.
+   - getMember(Long id): Fetches a member by ID; throws ResourceNotFoundException if missing.
+   - getAllMembers(): Returns all members as DTOs.
+   - toDTO(Member): Converts a Member entity to a MemberDTO.
+
+c) BorrowService
+   - borrowBook(Long memberId, Long bookId):
+     1. Checks if the book has available copies (throws BookNotAvailableException).
+     2. Validates the member exists.
+     3. Checks the member hasn't exceeded 3 active borrows (throws BorrowLimitExceededException).
+     4. Decrements availableCopies and creates a BorrowRecord.
+     Uses @Transactional to ensure atomicity.
+   - returnBook(Long borrowId):
+     1. Finds the borrow record (throws ResourceNotFoundException).
+     2. Checks it hasn't already been returned (throws BookAlreadyReturnedException).
+     3. Sets returnedAt and increments availableCopies.
+     Uses @Transactional to ensure atomicity.
+   - getBorrowHistory(Long memberId): Returns a member's borrow history.
+   - getAllBorrowRecords(): Returns all borrow records.
+
+
+7. CONTROLLERS (REST API Endpoints)
+------------------------------------
+a) BookController (base path: /api/books)
+   - POST /api/books              - Add a new book (body: BookRequest).
+   - GET  /api/books              - Get all books.
+   - GET  /api/books/available    - Get books with available copies.
+   - GET  /api/books/{id}         - Get a specific book by ID.
+   - PUT  /api/books/{id}/copies  - Update total copies (body: UpdateCopiesRequest).
+
+b) MemberController (base path: /api/members)
+   - POST /api/members            - Register a new member (body: MemberRequest).
+   - GET  /api/members            - Get all members.
+   - GET  /api/members/{id}       - Get a specific member by ID.
+
+c) BorrowController (base path: /api/borrows)
+   - POST /api/borrows            - Borrow a book (body: BorrowRequest).
+   - PUT  /api/borrows/{id}/return - Return a borrowed book.
+   - GET  /api/borrows            - Get all borrow records.
+   - GET  /api/borrows/member/{memberId} - Get borrow history for a member.
+
+
+8. CUSTOM EXCEPTION HANDLING
+------------------------------
+Instead of returning raw stack traces, the application uses custom exceptions
+and a GlobalExceptionHandler (@RestControllerAdvice) to return structured
+JSON error responses.
+
+Custom Exceptions:
+- ResourceNotFoundException      -> 404 Not Found (book/member/record not found)
+- BookNotAvailableException      -> 409 Conflict  (no copies left to borrow)
+- BorrowLimitExceededException   -> 409 Conflict  (member has 3 active borrows)
+- BookAlreadyReturnedException   -> 409 Conflict  (trying to return an already returned book)
+- InvalidOperationException      -> 400 Bad Request (e.g., invalid copy count update)
+
+ErrorResponse format:
+{
+    "status": 404,
+    "error": "Not Found",
+    "message": "Book with id 99 not found.",
+    "timestamp": "2026-04-11T12:00:00"
+}
+
+A catch-all handler for unexpected Exception types returns 500 Internal Server Error.
+
+
+9. SLF4J LOGGING
+-----------------
+SLF4J (Simple Logging Facade for Java) is used throughout the application.
+Each service and controller class declares a Logger:
+
+    private static final Logger logger = LoggerFactory.getLogger(ClassName.class);
+
+Logging levels used:
+- logger.info()  - Normal operations (adding book, fetching data, borrow/return).
+- logger.warn()  - Business rule violations (no copies, borrow limit, already returned).
+- logger.error() - Failures (resource not found, unexpected errors).
+
+This enables tracing request flow, debugging issues, and monitoring the
+application in production without modifying code.
+
+
+10. CONFIGURATION
+------------------
+application.properties:
+  - Sets the active Spring profile to "dev".
+
+application-dev.properties:
+  - MySQL connection URL with createDatabaseIfNotExist=true.
+  - JPA dialect: MySQLDialect (auto-detected by Hibernate).
+  - ddl-auto: update (auto-creates/updates tables from entities).
+  - show-sql: true (prints SQL queries to console for debugging).
+
+================================================================================

@@ -1,0 +1,9 @@
+com\library\LibraryService\MemberServiceTest.class
+com\library\LibraryController\MemberControllerTest.class
+com\library\LibraryEntity\BookTest.class
+com\library\LibraryCustomExceptions\ExceptionTest.class
+com\library\LibraryCustomExceptions\GlobalExceptionHandlerTest.class
+com\library\LibraryDTO\DTOTest.class
+com\library\LibraryEntity\MemberTest.class
+com\library\LibraryCustomExceptions\ErrorResponseTest.class
+com\library\LibraryEntity\BorrowRecordTest.class
