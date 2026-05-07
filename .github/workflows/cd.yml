@@ -1,0 +1,178 @@
+name: CD
+
+# ---------------------------------------------------------------------------
+# Continuous Deployment
+# Trigger:  push to main (i.e. PR merged to main) or manual dispatch
+# Strategy: Build & push image to GHCR, then SSH to staging host,
+#           keep previous image as :previous (rollback target),
+#           replace the running container, health-check it,
+#           auto-rollback on failure.
+# ---------------------------------------------------------------------------
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}     # e.g. owner/library-management
+  CONTAINER_NAME: library-management
+  APP_PORT: 8080
+
+jobs:
+  # -------------------------------------------------------------------------
+  # Job 1: build the production image and push it to GHCR with two tags:
+  #   - <short-sha>  (immutable, used to identify this exact release)
+  #   - latest       (what the staging host actually runs)
+  # -------------------------------------------------------------------------
+  build-and-push:
+    name: Build & Push Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ steps.meta.outputs.sha_tag }}
+      image_ref: ${{ steps.meta.outputs.image_ref }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Compute image reference & tag
+        id: meta
+        run: |
+          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
+          IMAGE_LOWER="${REGISTRY,,}/${IMAGE_NAME,,}"
+          echo "sha_tag=${SHORT_SHA}"   >> "$GITHUB_OUTPUT"
+          echo "image_ref=${IMAGE_LOWER}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image_ref }}:${{ steps.meta.outputs.sha_tag }}
+            ${{ steps.meta.outputs.image_ref }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # -------------------------------------------------------------------------
+  # Job 2: deploy to the staging host over SSH.
+  # Replaces the existing container; on health-check failure rolls back to
+  # the image previously tagged :previous.
+  # -------------------------------------------------------------------------
+  deploy:
+    name: Deploy to Staging
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+    steps:
+      - name: Deploy over SSH
+        id: deploy
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host:     ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key:      ${{ secrets.DEPLOY_SSH_KEY }}
+          port:     ${{ secrets.DEPLOY_PORT || 22 }}
+          script_stop: true
+          envs: GHCR_TOKEN,GHCR_USER,IMAGE_REF,IMAGE_TAG,CONTAINER_NAME,APP_PORT
+          script: |
+            set -euo pipefail
+
+            IMAGE_REF="${{ needs.build-and-push.outputs.image_ref }}"
+            IMAGE_TAG="${{ needs.build-and-push.outputs.image_tag }}"
+            CONTAINER_NAME="${{ env.CONTAINER_NAME }}"
+            APP_PORT="${{ env.APP_PORT }}"
+
+            echo "==> Logging in to GHCR on host"
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+            # ----- 1. Preserve current :latest as :previous (rollback target) -----
+            if docker image inspect "${IMAGE_REF}:latest" >/dev/null 2>&1; then
+              docker tag "${IMAGE_REF}:latest" "${IMAGE_REF}:previous"
+              echo "==> Old :latest re-tagged as :previous (rollback target ready)"
+            else
+              echo "==> No existing :latest found (first deployment)"
+            fi
+
+            # ----- 2. Pull the new image and promote it to :latest -----
+            echo "==> Pulling ${IMAGE_REF}:${IMAGE_TAG}"
+            docker pull "${IMAGE_REF}:${IMAGE_TAG}"
+            docker tag  "${IMAGE_REF}:${IMAGE_TAG}" "${IMAGE_REF}:latest"
+
+            # ----- 3. Replace the running container -----
+            echo "==> Replacing container ${CONTAINER_NAME}"
+            docker rm -f "${CONTAINER_NAME}" 2>/dev/null || true
+            docker run -d \
+              --name "${CONTAINER_NAME}" \
+              --restart unless-stopped \
+              -p "${APP_PORT}:8080" \
+              -e SPRING_PROFILES_ACTIVE=staging \
+              "${IMAGE_REF}:latest"
+
+            # ----- 4. Health check (any HTTP response = app is up) -----
+            echo "==> Waiting for app to respond on :${APP_PORT}"
+            HEALTHY=0
+            for i in $(seq 1 30); do
+              CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${APP_PORT}/" || echo "000")
+              if [ "${CODE}" != "000" ] && [ "${CODE}" != "502" ] && [ "${CODE}" != "504" ]; then
+                echo "==> Healthy on attempt ${i} (HTTP ${CODE})"
+                HEALTHY=1
+                break
+              fi
+              sleep 2
+            done
+
+            if [ "${HEALTHY}" -ne 1 ]; then
+              echo "::error::Health check failed. Rolling back to :previous."
+              docker logs --tail=200 "${CONTAINER_NAME}" || true
+              docker rm -f "${CONTAINER_NAME}" || true
+              if docker image inspect "${IMAGE_REF}:previous" >/dev/null 2>&1; then
+                docker tag "${IMAGE_REF}:previous" "${IMAGE_REF}:latest"
+                docker run -d \
+                  --name "${CONTAINER_NAME}" \
+                  --restart unless-stopped \
+                  -p "${APP_PORT}:8080" \
+                  -e SPRING_PROFILES_ACTIVE=staging \
+                  "${IMAGE_REF}:previous"
+                echo "==> Rolled back to :previous"
+              else
+                echo "::error::No :previous image to roll back to."
+              fi
+              exit 1
+            fi
+
+            # ----- 5. Cleanup dangling images -----
+            docker image prune -f >/dev/null 2>&1 || true
+            echo "==> Deployment complete."
+
+      - name: Record deployment result
+        if: always()
+        run: |
+          {
+            echo "## Deployment Result"
+            echo ""
+            echo "- **Status:** ${{ job.status }}"
+            echo "- **Image:** \`${{ needs.build-and-push.outputs.image_ref }}:${{ needs.build-and-push.outputs.image_tag }}\`"
+            echo "- **Promoted to:** \`${{ needs.build-and-push.outputs.image_ref }}:latest\`"
+            echo "- **Rollback tag:** \`${{ needs.build-and-push.outputs.image_ref }}:previous\`"
+            echo "- **Commit:** \`${{ github.sha }}\`"
+            echo "- **Actor:** ${{ github.actor }}"
+            echo "- **Time (UTC):** $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          } >> "$GITHUB_STEP_SUMMARY"
