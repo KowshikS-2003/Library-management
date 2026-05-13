@@ -49,26 +49,21 @@ jobs:
           echo "image_ref=${IMAGE_LOWER}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | \
+            podman login ghcr.io -u "${{ github.actor }}" --password-stdin
 
       - name: Build and push image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: |
-            ${{ steps.meta.outputs.image_ref }}:${{ steps.meta.outputs.sha_tag }}
-            ${{ steps.meta.outputs.image_ref }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+        run: |
+          IMAGE_REF="${{ steps.meta.outputs.image_ref }}"
+          SHA_TAG="${{ steps.meta.outputs.sha_tag }}"
+          podman build \
+            --format docker \
+            -t "${IMAGE_REF}:${SHA_TAG}" \
+            -t "${IMAGE_REF}:latest" \
+            -f ./Dockerfile .
+          podman push "${IMAGE_REF}:${SHA_TAG}"
+          podman push "${IMAGE_REF}:latest"
 
   # -------------------------------------------------------------------------
   # Job 2: deploy to the staging host over SSH.
@@ -101,11 +96,11 @@ jobs:
             APP_PORT="${{ env.APP_PORT }}"
 
             echo "==> Logging in to GHCR on host"
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+            echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
 
             # ----- 1. Preserve current :latest as :previous (rollback target) -----
-            if docker image inspect "${IMAGE_REF}:latest" >/dev/null 2>&1; then
-              docker tag "${IMAGE_REF}:latest" "${IMAGE_REF}:previous"
+            if podman image exists "${IMAGE_REF}:latest"; then
+              podman tag "${IMAGE_REF}:latest" "${IMAGE_REF}:previous"
               echo "==> Old :latest re-tagged as :previous (rollback target ready)"
             else
               echo "==> No existing :latest found (first deployment)"
@@ -113,13 +108,13 @@ jobs:
 
             # ----- 2. Pull the new image and promote it to :latest -----
             echo "==> Pulling ${IMAGE_REF}:${IMAGE_TAG}"
-            docker pull "${IMAGE_REF}:${IMAGE_TAG}"
-            docker tag  "${IMAGE_REF}:${IMAGE_TAG}" "${IMAGE_REF}:latest"
+            podman pull "${IMAGE_REF}:${IMAGE_TAG}"
+            podman tag  "${IMAGE_REF}:${IMAGE_TAG}" "${IMAGE_REF}:latest"
 
             # ----- 3. Replace the running container -----
             echo "==> Replacing container ${CONTAINER_NAME}"
-            docker rm -f "${CONTAINER_NAME}" 2>/dev/null || true
-            docker run -d \
+            podman rm -f "${CONTAINER_NAME}" 2>/dev/null || true
+            podman run -d \
               --name "${CONTAINER_NAME}" \
               --restart unless-stopped \
               -p "${APP_PORT}:8080" \
@@ -141,11 +136,11 @@ jobs:
 
             if [ "${HEALTHY}" -ne 1 ]; then
               echo "::error::Health check failed. Rolling back to :previous."
-              docker logs --tail=200 "${CONTAINER_NAME}" || true
-              docker rm -f "${CONTAINER_NAME}" || true
-              if docker image inspect "${IMAGE_REF}:previous" >/dev/null 2>&1; then
-                docker tag "${IMAGE_REF}:previous" "${IMAGE_REF}:latest"
-                docker run -d \
+              podman logs --tail=200 "${CONTAINER_NAME}" || true
+              podman rm -f "${CONTAINER_NAME}" || true
+              if podman image exists "${IMAGE_REF}:previous"; then
+                podman tag "${IMAGE_REF}:previous" "${IMAGE_REF}:latest"
+                podman run -d \
                   --name "${CONTAINER_NAME}" \
                   --restart unless-stopped \
                   -p "${APP_PORT}:8080" \
@@ -159,7 +154,7 @@ jobs:
             fi
 
             # ----- 5. Cleanup dangling images -----
-            docker image prune -f >/dev/null 2>&1 || true
+            podman image prune -f >/dev/null 2>&1 || true
             echo "==> Deployment complete."
 
       - name: Record deployment result
