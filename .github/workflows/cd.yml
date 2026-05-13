@@ -74,11 +74,21 @@ jobs:
     name: Deploy to Staging
     needs: build-and-push
     runs-on: ubuntu-latest
-    environment:
-      name: staging
     steps:
+      - name: Check if deploy is configured
+        id: check
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          if [ -n "${DEPLOY_HOST}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::DEPLOY_HOST secret not set — skipping SSH deploy."
+          fi
+
       - name: Deploy over SSH
-        id: deploy
+        if: steps.check.outputs.configured == 'true'
         uses: appleboy/ssh-action@v1.2.0
         with:
           host:     ${{ secrets.DEPLOY_HOST }}
