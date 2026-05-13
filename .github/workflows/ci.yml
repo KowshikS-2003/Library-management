@@ -67,3 +67,42 @@ jobs:
             -t "${{ env.IMAGE_NAME }}:${IMAGE_TAG}" \
             -t "${{ env.IMAGE_NAME }}:latest" \
             -f ./Dockerfile .
+
+      - name: Run container smoke test
+        run: |
+          IMAGE_TAG="${{ steps.meta.outputs.tag }}"
+
+          # Start container in background
+          podman run -d \
+            --name smoke-test \
+            -p 8080:8080 \
+            -e SPRING_PROFILES_ACTIVE=prod \
+            "${{ env.IMAGE_NAME }}:${IMAGE_TAG}"
+
+          # Wait up to 60 s for the app to respond
+          echo "==> Waiting for application to start..."
+          HEALTHY=0
+          for i in $(seq 1 30); do
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/ || echo "000")
+            if [ "${CODE}" != "000" ] && [ "${CODE}" != "502" ] && [ "${CODE}" != "504" ]; then
+              echo "==> Application is up (HTTP ${CODE}) on attempt ${i}"
+              HEALTHY=1
+              break
+            fi
+            echo "    attempt ${i}/30 — HTTP ${CODE}, retrying in 2 s..."
+            sleep 2
+          done
+
+          # Dump logs always (visible in Actions UI)
+          echo "==> Container logs:"
+          podman logs smoke-test || true
+
+          # Clean up
+          podman rm -f smoke-test || true
+
+          # Fail the step if the app never responded
+          if [ "${HEALTHY}" -ne 1 ]; then
+            echo "::error::Smoke test failed — application did not start within 60 seconds."
+            exit 1
+          fi
+          echo "==> Smoke test passed."
