@@ -1,18 +1,19 @@
 package com.library.LibraryService;
 
-import com.library.LibraryCustomExceptions.InvalidOperationException;
-import com.library.LibraryDTO.AuthResponse;
-import com.library.LibraryDTO.LoginRequest;
-import com.library.LibraryDTO.RegisterRequest;
-import com.library.LibraryEntity.LibraryMmember.AppUser;
-import com.library.LibraryRepository.MemberRepo.AppUserRepository;
-import com.library.LibrarySecurity.JwtService;
+import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import static org.mockito.ArgumentMatchers.any;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -21,11 +22,13 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import com.library.LibraryCustomExceptions.InvalidOperationException;
+import com.library.LibraryDTO.AuthResponse;
+import com.library.LibraryDTO.LoginRequest;
+import com.library.LibraryDTO.RegisterRequest;
+import com.library.LibraryEntity.LibraryMmember.AppUser;
+import com.library.LibraryRepository.MemberRepo.AppUserRepository;
+import com.library.LibrarySecurity.JwtService;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
@@ -123,4 +126,4 @@ class AuthServiceTest {
 
         assertThrows(InvalidOperationException.class, () -> authService.login(req));
     }
-}
+}// change 1 and change 
