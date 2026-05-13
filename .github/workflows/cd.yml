@@ -19,6 +19,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}     # e.g. owner/library-management
   CONTAINER_NAME: library-management
   APP_PORT: 8080
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   # -------------------------------------------------------------------------
