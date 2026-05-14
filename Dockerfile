@@ -10,9 +10,7 @@ RUN mvn -B -q dependency:go-offline
 
 # Build the application
 COPY src ./src
-RUN mvn -B -q clean package -DskipTests \
-    && mkdir -p target/extracted \
-    && java -Djarmode=layertools -jar target/library-management.jar extract --destination target/extracted
+RUN mvn -B -q clean package -DskipTests
 
 # ---------- Stage 2: Runtime ----------
 FROM eclipse-temurin:17-jre-alpine AS runtime
@@ -22,11 +20,8 @@ RUN addgroup -S app && adduser -S app -G app
 
 WORKDIR /app
 
-# Copy Spring Boot layered jar contents (better caching)
-COPY --from=build /workspace/target/extracted/dependencies/         ./
-COPY --from=build /workspace/target/extracted/spring-boot-loader/   ./
-COPY --from=build /workspace/target/extracted/snapshot-dependencies/ ./
-COPY --from=build /workspace/target/extracted/application/          ./
+# Copy the fat JAR
+COPY --from=build /workspace/target/library-management.jar app.jar
 
 USER app
 
@@ -37,4 +32,4 @@ ENV SPRING_PROFILES_ACTIVE=prod \
 
 EXPOSE 8080
 
-ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS org.springframework.boot.loader.launch.JarLauncher"]
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar app.jar"]
